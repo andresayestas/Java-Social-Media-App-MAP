@@ -1,4 +1,5 @@
 import domain.Friendship;
+import domain.Tuple;
 import domain.User;
 import repository.Repository;
 import repository.RepositoryFactory;
@@ -14,8 +15,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+/**
+ * Main class of the application
+ */
 public class Main {
 
+    /**
+     * loads configuration from config.properties
+     * @return properties object with configuration
+     */
     private static Properties incarcaConfiguratie(){
         Properties props = new Properties();
 
@@ -31,6 +39,10 @@ public class Main {
         return props;
     }
 
+    /**
+     * starts the social network application
+     * @param args command line arguments
+     */
     public static void main(String[] args) {
 
         Properties config = incarcaConfiguratie();
@@ -38,11 +50,20 @@ public class Main {
         RepositoryFactory factory = new RepositoryFactory(config);
 
 
-        Validator<User> userValidator = new UserValidator();
+        Validator<User> baseUserValidator = new UserValidator();
+
+        Validator<User> userValidator = baseUserValidator.andThen(u -> {
+            if (u.getFirstName().length() < 2 || u.getLastName().length() < 2){
+                throw new validators.ValidationException("Nume si prenume trebuie sa aiba cel putin 2 caractere");
+            }
+        });
+
+
+
         Validator<Friendship> friendshipValidator = new FriendshipValidator();
 
         Repository<Long, User> userRepository = factory.createUserRepository(userValidator);
-        Repository<Long, Friendship> friendshipRepository = factory.createFriendshipRepository(friendshipValidator);
+        Repository<Tuple<Long, Long>, Friendship> friendshipRepository = factory.createFriendshipRepository(friendshipValidator);
 
         UserService userService = new UserService(userRepository, friendshipRepository);
         FriendshipService friendshipService = new FriendshipService(friendshipRepository, userRepository);
