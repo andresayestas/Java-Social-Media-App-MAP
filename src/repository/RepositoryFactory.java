@@ -12,7 +12,7 @@ import java.util.Properties;
 import java.util.function.Function;
 
 /**
- * Factory class that creates repositories based on configuration
+ - Factory class that creates repositories based on configuration
  */
 public class RepositoryFactory {
     private final Properties config;
@@ -20,8 +20,8 @@ public class RepositoryFactory {
     private final Map<RepositoryType, Function<Validator<Friendship>, Repository<Tuple<Long, Long>, Friendship>>> friendshipCreators = new HashMap<>();
 
     /**
-     * creates a repository factory with the given properties
-     * @param config the configuration properties
+     - creates a repository factory with the given properties
+     - @param config the configuration properties
      */
     public RepositoryFactory(Properties config) {
         this.config = config;
@@ -49,10 +49,10 @@ public class RepositoryFactory {
     }
 
     /**
-     * creates a repository for users
-     * @param validator the validator for users
-     * @return the user repository
-     * @throws IllegalArgumentException if repository type is unknown
+     - creates a repository for users
+     - @param validator the validator for users
+     - @return the user repository
+     - @throws IllegalArgumentException if repository type is unknown
      */
     public Repository<Long, User> createUserRepository(Validator<User> validator) {
         RepositoryType type = getRepositoryType();
@@ -62,16 +62,48 @@ public class RepositoryFactory {
     }
 
     /**
-     * creates a repository for friendships
-     * @param validator the validator for friendships
-     * @return the friendship repository
-     * @throws IllegalArgumentException if repository type is unknown
+     * creates a paging repository for users (supported only for DATABASE type)
+     *
+     * @param validator the validator for users
+     * @return the paging user repository
+     * @throws UnsupportedOperationException if repository type does not support pagination
+     */
+    public PagingRepository<Long, User> createPagingUserRepository(Validator<User> validator) {
+        Repository<Long, User> repo = createUserRepository(validator);
+        if (repo instanceof PagingRepository) {
+            @SuppressWarnings("unchecked")
+            PagingRepository<Long, User> pagingRepo = (PagingRepository<Long, User>) repo;
+            return pagingRepo;
+        }
+        throw new UnsupportedOperationException("Pagination is only supported for DATABASE repository");
+    }
+
+    /**
+     - creates a repository for friendships
+     - @param validator the validator for friendships
+     - @return the friendship repository
+     - @throws IllegalArgumentException if repository type is unknown
      */
     public Repository<Tuple<Long, Long>, Friendship> createFriendshipRepository(Validator<Friendship> validator) {
         RepositoryType type = getRepositoryType();
         return Optional.ofNullable(friendshipCreators.get(type))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown repository type: " + type))
                 .apply(validator);
+    }
+
+    /**
+     * creates a database repository for friendships supporting paginated friend queries
+     *
+     * @param validator the validator for friendships
+     * @return the database friendship repository
+     * @throws UnsupportedOperationException if repository type is not DATABASE
+     */
+    public FriendshipDbRepository createFriendshipDbRepository(Validator<Friendship> validator) {
+        Repository<Tuple<Long, Long>, Friendship> repo = createFriendshipRepository(validator);
+        if (repo instanceof FriendshipDbRepository) {
+            return (FriendshipDbRepository) repo;
+        }
+        throw new UnsupportedOperationException("Pagination is only supported for DATABASE repository");
     }
 
     private RepositoryType getRepositoryType() {

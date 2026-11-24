@@ -5,32 +5,38 @@ import repository.RepositoryException;
 import service.CommunityService;
 import service.FriendshipService;
 import service.UserService;
+import util.paging.Page;
+import util.paging.Pageable;
 import validators.ValidationException;
 
 import java.util.List;
 import java.util.Scanner;
+import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 /**
- * Console user interface for the social network
+ - Console user interface for the social network
  */
 
 public class Console {
     private final UserService userService;
     private final FriendshipService friendshipService;
     private final CommunityService communityService;
+    private final int pageSize;
     private final Scanner scanner;
 
     /**
-     * creates the console interface with required services
-     * @param userService service for user operations
-     * @param friendshipService service for friendship operations
-     * @param communityService service for community operations
+     - creates the console interface with required services
+     - @param userService service for user operations
+     - @param friendshipService service for friendship operations
+     - @param communityService service for community operations
+     - @param pageSize number of elements displayed per page
      */
-    public Console(UserService userService, FriendshipService friendshipService, CommunityService communityService) {
+    public Console(UserService userService, FriendshipService friendshipService, CommunityService communityService, int pageSize) {
         this.userService = userService;
         this.friendshipService = friendshipService;
         this.communityService = communityService;
+        this.pageSize = pageSize;
         this.scanner = new Scanner(System.in);
     }
 
@@ -45,12 +51,14 @@ public class Console {
         System.out.println("7- Afiseaza numarul de comunitate");
         System.out.println("8- Afiseaza comunitatea cea mai sociabila");
         System.out.println("9- Actualizeaza user");
+        System.out.println("12- Afiseaza users (paginat)");
+        System.out.println("13- Afiseaza prietenii unui user (paginat)");
         System.out.println("0- Exit");
         System.out.print("Alege optiune = ");
     }
 
     /**
-     * runs the main menu loop
+     - runs the main menu loop
      */
     public void run(){
         boolean meniu = true;
@@ -95,6 +103,12 @@ public class Console {
                     case 11:
                         showValidUsers();
                         break;
+                    case 12:
+                        showUsersPaginated();
+                        break;
+                    case 13:
+                        showUserFriendsPaginated();
+                        break;
                     case 0:
                         meniu = false;
                         System.out.println("pa pa");
@@ -105,7 +119,7 @@ public class Console {
             } catch (java.util.InputMismatchException e) {
                 System.out.println("\n Eroare: Trebuie sa introduci un numar valid, nu text!");
                 scanner.nextLine();
-            } catch (ValidationException | IllegalArgumentException e){
+            } catch (ValidationException | IllegalArgumentException | UnsupportedOperationException e){
                 System.out.println("\n Exista eroare: " + e.getMessage());
             } catch (RepositoryException e){
                 System.out.println("\n Eroare baza de date: " + e.getMessage());
@@ -218,5 +232,76 @@ public class Console {
                     System.out.println("Id: " + user.getId() + " - " + user.getFirstName() + " " + user.getLastName()));
         }
 
+    }
+
+    /**
+     * Displays all users in a paginated interactive view with forward and backward navigation
+     */
+    private void showUsersPaginated() {
+        navigatePages("Lista de users (paginat)", userService::getUsersOnPage);
+    }
+
+    /**
+     * Prompts for a user ID and displays their friends in a paginated interactive view
+     */
+    private void showUserFriendsPaginated() {
+        System.out.print("ID utilizator: ");
+        Long userId = scanner.nextLong();
+        scanner.nextLine();
+
+        navigatePages("Prietenii utilizatorului " + userId + " (paginat)",
+                pageable -> friendshipService.getFriendsOnPage(userId, pageable));
+    }
+
+    /**
+     * Handles interactive forward and backward page navigation for a paginated User source
+     *
+     * @param title       header title displayed above each page
+     * @param pageFetcher function that retrieves a Page of users for a given Pageable request
+     */
+    private void navigatePages(String title, Function<Pageable, Page<User>> pageFetcher) {
+        int currentPage = 0;
+
+        while (true) {
+            Page<User> page = pageFetcher.apply(new Pageable(currentPage, pageSize));
+            int totalElements = page.getTotalNumberOfElements();
+            int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+            int displayPage = totalPages == 0 ? 0 : currentPage + 1;
+
+            System.out.println("\ntitle");
+            List<User> elements = StreamSupport.stream(page.getElementsOnPage().spliterator(), false).toList();
+
+            if (elements.isEmpty()) {
+                System.out.println("Nu exista elemente de afisat.");
+            } else {
+                elements.forEach(user ->
+                        System.out.println("Id " + user.getId() + " - " + user.getFirstName() + " " + user.getLastName()));
+            }
+
+            System.out.println("Pagina " + displayPage + " din " + totalPages + " (Total elemente: " + totalElements + ")");
+            System.out.print("Navigare: [n] Inainte | [p] Inapoi | [x] Iesire = ");
+            String command = scanner.nextLine().trim().toLowerCase();
+
+            switch (command) {
+                case "n":
+                    if (currentPage + 1 < totalPages) {
+                        currentPage++;
+                    } else {
+                        System.out.println("Esti deja pe ultima pagina!");
+                    }
+                    break;
+                case "p":
+                    if (currentPage > 0) {
+                        currentPage--;
+                    } else {
+                        System.out.println("Esti deja pe prima pagina!");
+                    }
+                    break;
+                case "x":
+                    return;
+                default:
+                    System.out.println("Optiune invalida! Foloseste n, p sau x.");
+            }
+        }
     }
 }

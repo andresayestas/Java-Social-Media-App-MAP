@@ -3,6 +3,8 @@ package repository;
 import domain.Friendship;
 import domain.Tuple;
 import domain.User;
+import util.paging.Page;
+import util.paging.Pageable;
 import validators.ValidationException;
 import validators.Validator;
 
@@ -18,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Database repository for friendships
+ - Database repository for friendships
  */
 public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Friendship> {
     private final Validator<Friendship> validator;
@@ -27,11 +29,11 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     private final String password;
 
     /**
-     * creates a database repository for friendships
-     * @param validator the validator for friendships
-     * @param url the database url
-     * @param username the database user
-     * @param password the database password
+     - creates a database repository for friendships
+     - @param validator the validator for friendships
+     - @param url the database url
+     - @param username the database user
+     - @param password the database password
      */
     public FriendshipDbRepository(Validator<Friendship> validator, String url, String username, String password) {
         this.validator = validator;
@@ -41,11 +43,11 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     }
 
     /**
-     * finds one friendship by composite id
-     * @param id the pair of user ids
-     * @return Optional with the friendship or empty if not found
-     * @throws IllegalArgumentException if id is null
-     * @throws RepositoryException if a database error occurs
+     - finds one friendship by composite id
+     - @param id the pair of user ids
+     - @return Optional with the friendship or empty if not found
+     - @throws IllegalArgumentException if id is null
+     - @throws RepositoryException if a database error occurs
      */
     @Override
     public Optional<Friendship> findOne(Tuple<Long, Long> id) {
@@ -75,9 +77,9 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     }
 
     /**
-     * gets all friendships from the database
-     * @return all friendships ordered by ids
-     * @throws RepositoryException if a database error occurs
+     - gets all friendships from the database
+     - @return all friendships ordered by ids
+     - @throws RepositoryException if a database error occurs
      */
     @Override
     public Iterable<Friendship> findAll() {
@@ -98,12 +100,79 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     }
 
     /**
-     * saves a new friendship in the database
-     * @param entity the friendship to save
-     * @return Optional.empty() if saved, or Optional with the friendship if it already exists
-     * @throws IllegalArgumentException if entity is null
-     * @throws ValidationException if entity is not valid
+     * retrieves a specific page of friends for a given user using a single SQL JOIN query
+     *
+     * @param userId   the id of the user whose friends are queried
+     * @param pageable pagination parameters specifying page number and page size
+     * @return a Page containing the User objects of the friends on the requested page and the total friend count
+     * @throws IllegalArgumentException if userId or pageable is null, or pagination parameters are invalid
      * @throws RepositoryException if a database error occurs
+     */
+    public Page<User> findFriendsOnPage(Long userId, Pageable pageable) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User id cannot be null");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("Pageable cannot be null");
+        }
+        if (pageable.getPageNumber() < 0 || pageable.getPageSize() <= 0) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
+        }
+
+        String countSql = "SELECT COUNT(*) FROM friendships WHERE id1 = ? OR id2 = ?";
+        String pageSql = "SELECT u.id, u.first_name, u.last_name " +
+                "FROM friendships f " +
+                "JOIN users u ON u.id = CASE WHEN f.id1 = ? THEN f.id2 ELSE f.id1 END " +
+                "WHERE f.id1 = ? OR f.id2 = ? " +
+                "ORDER BY u.id LIMIT ? OFFSET ?";
+
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
+            int totalFriends = 0;
+            try (PreparedStatement countStatement = connection.prepareStatement(countSql)) {
+                countStatement.setLong(1, userId);
+                countStatement.setLong(2, userId);
+
+                try (ResultSet countResultSet = countStatement.executeQuery()) {
+                    if (countResultSet.next()) {
+                        totalFriends = countResultSet.getInt(1);
+                    }
+                }
+            }
+
+            List<User> friends = new ArrayList<>();
+            try (PreparedStatement pageStatement = connection.prepareStatement(pageSql)) {
+                pageStatement.setLong(1, userId);
+                pageStatement.setLong(2, userId);
+                pageStatement.setLong(3, userId);
+                pageStatement.setInt(4, pageable.getPageSize());
+                pageStatement.setInt(5, pageable.getPageNumber() * pageable.getPageSize());
+
+                try (ResultSet resultSet = pageStatement.executeQuery()) {
+                    while (resultSet.next()) {
+                        Long id = resultSet.getLong("id");
+                        String firstName = resultSet.getString("first_name");
+                        String lastName = resultSet.getString("last_name");
+
+                        User friend = new User(firstName, lastName);
+                        friend.setId(id);
+                        friends.add(friend);
+                    }
+                }
+            }
+
+            return new Page<>(friends, totalFriends);
+        } catch (SQLException e) {
+            throw handleSqlException("findFriendsOnPage", e);
+        }
+    }
+
+    /**
+     - saves a new friendship in the database
+     - @param entity the friendship to save
+     - @return Optional.empty() if saved, or Optional with the friendship if it already exists
+     - @throws IllegalArgumentException if entity is null
+     - @throws ValidationException if entity is not valid
+     - @throws RepositoryException if a database error occurs
      */
     @Override
     public Optional<Friendship> save(Friendship entity) throws ValidationException {
@@ -132,11 +201,11 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     }
 
     /**
-     * deletes a friendship by composite id
-     * @param id the pair of user ids
-     * @return Optional with the removed friendship or empty if not found
-     * @throws IllegalArgumentException if id is null
-     * @throws RepositoryException if a database error occurs
+     - deletes a friendship by composite id
+     - @param id the pair of user ids
+     - @return Optional with the removed friendship or empty if not found
+     - @throws IllegalArgumentException if id is null
+     - @throws RepositoryException if a database error occurs
      */
     @Override
     public Optional<Friendship> delete(Tuple<Long, Long> id) {
@@ -162,12 +231,12 @@ public class FriendshipDbRepository implements Repository<Tuple<Long, Long>, Fri
     }
 
     /**
-     * updates the date of an existing friendship
-     * @param entity the friendship to update
-     * @return Optional.empty() if updated, or Optional with the friendship if not found
-     * @throws IllegalArgumentException if entity is null
-     * @throws ValidationException if entity is not valid
-     * @throws RepositoryException if a database error occurs
+     - updates the date of an existing friendship
+     - @param entity the friendship to update
+     - @return Optional.empty() if updated, or Optional with the friendship if not found
+     - @throws IllegalArgumentException if entity is null
+     - @throws ValidationException if entity is not valid
+     - @throws RepositoryException if a database error occurs
      */
     @Override
     public Optional<Friendship> update(Friendship entity) throws ValidationException {

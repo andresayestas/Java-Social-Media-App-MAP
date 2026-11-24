@@ -16,13 +16,13 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /**
- * Main class of the application
+ - Main class of the application
  */
 public class Main {
 
     /**
-     * loads configuration from config.properties
-     * @return properties object with configuration
+     - loads configuration from config.properties
+     - @return properties object with configuration
      */
     private static Properties incarcaConfiguratie(){
         Properties props = new Properties();
@@ -40,8 +40,8 @@ public class Main {
     }
 
     /**
-     * starts the social network application
-     * @param args command line arguments
+     - starts the social network application
+     - @param args command line arguments
      */
     public static void main(String[] args) {
 
@@ -69,7 +69,12 @@ public class Main {
         FriendshipService friendshipService = new FriendshipService(friendshipRepository, userRepository);
         CommunityService communityService = new CommunityService(userRepository, friendshipRepository);
 
-        Console console = new Console(userService, friendshipService, communityService);
+        int pageSize = Integer.parseInt(config.getProperty("page.size", "3").trim());
+        if (pageSize <= 0) {
+            throw new IllegalArgumentException("Page size must be greater than zero");
+        }
+
+        Console console = new Console(userService, friendshipService, communityService, pageSize);
 
         console.run();
     }
